@@ -7,7 +7,7 @@ from models.simple_perceptron import simples_perceptron
 from models.adaline import adaline
 from models.mlp import MLP
 
-data = np.loadtxt('data/spiral_d (1).csv', delimiter=',')
+data = np.loadtxt('Redes-Neurais-Artificiais\data\spiral_d (1).csv', delimiter=',')
 X = data[:,:-1]
 y = data[:, -1]
 
@@ -158,3 +158,108 @@ plt.title("Matriz de Confusão (NumPy Puro)")
 plt.xlabel("Predito")
 plt.ylabel("Real")
 plt.show()
+
+
+# =====================================================================
+# Questão 4: MLP — underfitting / overfitting (acrescentado abaixo;
+# não altera o fluxo anterior do relatório)
+# =====================================================================
+from pathlib import Path
+
+
+def train_test_split_np(X, y, test_size=0.2, seed=42):
+    rng = np.random.default_rng(seed)
+    idx = rng.permutation(X.shape[0])
+    n_test = int(X.shape[0] * test_size)
+    test_idx = idx[:n_test]
+    train_idx = idx[n_test:]
+    return X[train_idx], X[test_idx], y[train_idx], y[test_idx]
+
+
+def minmax_scale_bipolar(X):
+    x_min = np.min(X, axis=0)
+    x_max = np.max(X, axis=0)
+    return 2 * ((X - x_min) / (x_max - x_min + 1e-12)) - 1
+
+
+def confusion_matrix_binary(y_true, y_pred):
+    y_true = y_true.flatten()
+    y_pred = y_pred.flatten()
+    tp = np.sum((y_true == 1) & (y_pred == 1))
+    tn = np.sum((y_true == -1) & (y_pred == -1))
+    fp = np.sum((y_true == -1) & (y_pred == 1))
+    fn = np.sum((y_true == 1) & (y_pred == -1))
+    return np.array([[tn, fp], [fn, tp]], dtype=int)
+
+
+def binary_metrics_from_cm(cm):
+    tn, fp = cm[0, 0], cm[0, 1]
+    fn, tp = cm[1, 0], cm[1, 1]
+    acc = (tp + tn) / (tp + tn + fp + fn + 1e-12)
+    sens = tp / (tp + fn + 1e-12)
+    spec = tn / (tn + fp + 1e-12)
+    return acc, sens, spec
+
+
+def plot_learning_curve(errors, title):
+    plt.figure(figsize=(7, 4))
+    plt.plot(errors, color="blue")
+    plt.title(title)
+    plt.xlabel("Epocas")
+    plt.ylabel("Erro")
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_confusion_matrix_q4(cm, title):
+    plt.figure(figsize=(5, 4))
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Greens",
+        xticklabels=[-1, 1],
+        yticklabels=[-1, 1],
+    )
+    plt.title(title)
+    plt.xlabel("Predito")
+    plt.ylabel("Real")
+    plt.tight_layout()
+    plt.show()
+
+
+def run_mlp_case(case_name, n_hidden, X_train, X_test, y_train, y_test):
+    model = MLP(
+        n_input=2,
+        n_hidden=n_hidden,
+        n_output=1,
+        learning_rate=0.01,
+        n_epochs=5000,
+    )
+    model.fit(X_train, y_train.reshape(-1, 1))
+    y_pred_raw = model.predict(X_test).flatten()
+    y_pred = np.where(y_pred_raw >= 0, 1, -1)
+    cm = confusion_matrix_binary(y_test, y_pred)
+    acc, sens, spec = binary_metrics_from_cm(cm)
+    print(f"\n[{case_name}]")
+    print(f"Acuracia: {acc:.4f}")
+    print(f"Sensibilidade: {sens:.4f}")
+    print(f"Especificidade: {spec:.4f}")
+    plot_learning_curve(model.errors, f"{case_name} - Curva de aprendizado")
+    plot_confusion_matrix_q4(cm, f"{case_name} - Matriz de confusao")
+
+
+_csv_q4 = Path(__file__).resolve().parent / "data" / "spiral_d (1).csv"
+_data_q4 = np.loadtxt(_csv_q4, delimiter=",")
+X_q4 = minmax_scale_bipolar(_data_q4[:, :-1])
+y_q4 = _data_q4[:, -1].astype(int)
+X_train_q4, X_test_q4, y_train_q4, y_test_q4 = train_test_split_np(
+    X_q4, y_q4, test_size=0.2, seed=42
+)
+
+run_mlp_case(
+    "MLP Underfitting (3 neuronios)", 3, X_train_q4, X_test_q4, y_train_q4, y_test_q4
+)
+run_mlp_case(
+    "MLP Overfitting (80 neuronios)", 80, X_train_q4, X_test_q4, y_train_q4, y_test_q4
+)
