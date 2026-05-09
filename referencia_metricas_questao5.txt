@@ -1,0 +1,93 @@
+REFERENCIA PARA COMPARAR DEPOIS
+==============================
+Gerado para voce registrar um snapshot dos resultados e dos hiperparametros
+do MLP quando for testar outros valores.
+
+
+1) Snapshot dos resumens que voce rodou (Questao 5, 500 rodadas, teste 20%)
+   Fonte: saida do terminal apos rodar main.py (uma execucao concluida).
+
+[Perceptron]
+acuracia:    media=0.7150  std=0.1014  min=0.2500  max=0.8821
+sensibilidade: media=0.8000 std=0.2172 min=0.0000 max=1.0000
+especificidade: media=0.5033 std=0.2769 min=0.0000 max=1.0000
+precisao:    media=0.8096 std=0.1070 min=0.0000 max=1.0000
+f1:          media=0.7824 std=0.1365 min=0.0000 max=0.9302
+
+[Adaline]
+acuracia:    media=0.7863 std=0.0222 min=0.7036 max=0.8429
+sensibilidade: media=0.8820 std=0.0276 min=0.7857 max=0.9418
+especificidade: media=0.5471 std=0.0500 min=0.4030 max=0.6912
+precisao:    media=0.8302 std=0.0226 min=0.7401 max=0.8955
+f1:          media=0.8549 std=0.0162 min=0.7877 max=0.9013
+
+[MLP]
+acuracia:    media=0.5142 std=0.2540 min=0.2143 max=0.9214
+sensibilidade: media=0.4551 std=0.4910 min=0.0000 max=1.0000
+especificidade: media=0.6725 std=0.3857 min=0.0000 max=1.0000
+precisao:    media=0.3614 std=0.3911 min=0.0000 max=1.0000
+f1:          media=0.4010 std=0.4327 min=0.0000 max=0.9493
+
+
+2) Leitura rapida guardada para o relatorio (resumo da analise anterior)
+- Perceptron linear + problema espiral nao-linear => media ok porem alta variancia.
+- Adaline linear => medias maiores e desvio menor (mais estavel nesta simulacao).
+- MLP com poucas epocas por rodada na Q5 + init aleatorio => media perto de 0.5
+  e std grande (algumas rodadas muito boas, outras ruins). Interpretavel no texto.
+
+
+3) Hiperparametros MLP no codigo atual (snapshot - atualize quando mudar main.py)
+
+MLP parte principal (relatorio, dataset inteiro para treino do plot grande):
+  n_input=2, n_hidden=65, n_output=1,
+  learning_rate=0.00022222222222, n_epochs=70000
+
+MLP Questao 4 under/over (usa treino-teste fixo seed 42 nos dados bipolar):
+  under:  n_hidden=3,  lr=0.01, n_epochs=5000
+  over:   n_hidden=80, lr=0.01, n_epochs=5000
+
+MLP Questao 5 (500 rodadas, cada rodada novo split 80/20):
+  n_input=2, n_hidden=65, n_output=1,
+  learning_rate=0.01, n_epochs=N_EPOCHS_MLP_Q5 (conferir no topo main.py)
+
+
+4) Sugestoes gerais de hiperparametros para a espiral COM O SEU modelo (orientacao)
+
+Nao existe um unico melhor sempre; orden sugerido de experimentacao:
+
+a) Seed fixada antes do MLP principal comparar figuras entre execucoes:
+   np.random.seed( numero_inteiro ) imediatamente antes de criar modelo_mlp
+
+b) Parte principal (bonito no relatorio):
+   - Hidden: 40 a 128 costuma funcionar neste tipo de 2D.
+   - Learning rate tanh tipicamente menor que Ada: algo entre 5e-5 e 1e-3
+     (voce ja usa ~2.2e-4 com 70000 ep).
+   - Epocas: ate o erro estabilizar; MSE alto no fim reduz aumentando epocas ou
+     diminuindo levemente o LR.
+
+c) Questao 5 (estabilidade na media sobre 500 rodadas):
+   - Primeiro aumentar N_EPOCHS_MLP_Q5 (ex.: 800-2000) se o tempo suportar
+   - Se curva oscila forte: diminuir LR (ex.: 0.005 ou 0.003) OU epocas um pouco
+     maiores mantendo mesmo LR.
+
+d) Labels -1/+1 + tanh: limiar na saida ja esta em zero no codigo; manter dados
+    normalizados como na bipolar ajuda convergencia.
+
+Atualize este arquivo quando gravar novo run (copie novo bloco sob secao 1).
+
+
+5) CONFIG AJUSTADA (para comparar com a execucao anterior)
+Data sugerida: apos atualizar main.py conforme combinado.
+
+MLP parte principal:
+  np.random.seed(42) imediatamente antes de criar modelo_mlp
+  (hiperparams iguais: hidden 65, lr 2.2222e-4, epochs 70000)
+
+MLP Questao 5 (somente estas linhas mudaram em relacao ao snapshot antigo):
+  N_EPOCHS_MLP_Q5 = 1200   (antes 400)
+  LR_MLP_Q5 = 0.005       (antes 0.01)
+
+Rode main.py outra vez, copie aqui embaixo o novo bloco [Perceptron]/[Adaline]/[MLP]:
+
+--- COLE_NOVO_SUMARIO_TERMINAL_AQUI ---
+

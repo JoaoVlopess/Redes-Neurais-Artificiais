@@ -1,13 +1,26 @@
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-
+from pathlib import Path
 
 from models.simple_perceptron import simples_perceptron
-from models.adaline import adaline
+from models.adaline import adaline as Adaline
 from models.mlp import MLP
 
-data = np.loadtxt('Redes-Neurais-Artificiais\data\spiral_d (1).csv', delimiter=',')
+# Caminho do CSV (vale para relatório + questões juntos)
+CSV_DATA_PATH = Path(__file__).resolve().parent / "data" / "spiral_d (1).csv"
+
+# MLP principal (painel duplo + matriz): mesma seed = mesmos erros nas figuras entre execucoes
+SEED_MLP_PRINCIPAL = 42
+
+# ---------- Questão 5: validação Monte Carlo (R rodadas 80/20) ----------
+RODADAS_Q5 = 500
+SEED_Q5_MASTER = 20260508
+# MLP na Q5: mais épocas + LR um pouco menor que 0.01 tende a reduzir variância nas 500 rodadas
+N_EPOCHS_MLP_Q5 = 1200
+LR_MLP_Q5 = 0.005
+
+data = np.loadtxt(CSV_DATA_PATH, delimiter=",")
 X = data[:,:-1]
 y = data[:, -1]
 
@@ -43,8 +56,8 @@ plt.show()
 
 # ---------------------------------------
 
-adaline = adaline(learning_rate=0.0001, n_epochs=500)
-adaline.fit(X, y, prec=1e-6)
+modelo_adaline = Adaline(learning_rate=0.0001, n_epochs=500)
+modelo_adaline.fit(X, y, prec=1e-6)
 
     # 3. Visualização
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
@@ -53,7 +66,7 @@ fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 sns.scatterplot(x=X[:, 0], y=X[:, 1], hue=y, palette='viridis', ax=ax1)
     
 x1_min, x1_max = X[:, 0].min(), X[:, 0].max()
-w = adaline.w
+w = modelo_adaline.w
 if w[2] != 0:
         x_vals = np.linspace(x1_min, x1_max, 100)
         # Equação: w0*(-1) + w1*x1 + w2*x2 = 0 -> x2 = (w0 - w1*x1) / w2
@@ -66,7 +79,7 @@ ax1.set_ylim(X[:, 1].min()-1, X[:, 1].max()+1) # Para não fugir da escala
 ax1.legend()
 
     # --- Subplot 2: Evolução do EQM ---
-ax2.plot(adaline.errors, color='blue')
+ax2.plot(modelo_adaline.errors, color='blue')
 ax2.set_title("Evolução do Erro Quadrático Médio (EQM)")
 ax2.set_xlabel("Época")
 ax2.set_ylabel("EQM")
@@ -103,7 +116,8 @@ def matriz_confusao_manual(y_real, y_pred):
 d_mlp = y.reshape(-1, 1)
 
 # 2. Instanciando e Treinando o MLP
-# n_input=2 (x e y), n_hidden=15 (pode ajustar), n_output=1
+# n_input=2 (x e y), n_hidden=65, n_output=1
+np.random.seed(SEED_MLP_PRINCIPAL)
 modelo_mlp = MLP(n_input=2, n_hidden=65, n_output=1, learning_rate=0.00022222222222, n_epochs=70000)
 modelo_mlp.fit(X, d_mlp)
 
@@ -164,8 +178,6 @@ plt.show()
 # Questão 4: MLP — underfitting / overfitting (acrescentado abaixo;
 # não altera o fluxo anterior do relatório)
 # =====================================================================
-from pathlib import Path
-
 
 def train_test_split_np(X, y, test_size=0.2, seed=42):
     rng = np.random.default_rng(seed)
@@ -249,8 +261,7 @@ def run_mlp_case(case_name, n_hidden, X_train, X_test, y_train, y_test):
     plot_confusion_matrix_q4(cm, f"{case_name} - Matriz de confusao")
 
 
-_csv_q4 = Path(__file__).resolve().parent / "data" / "spiral_d (1).csv"
-_data_q4 = np.loadtxt(_csv_q4, delimiter=",")
+_data_q4 = np.loadtxt(CSV_DATA_PATH, delimiter=",")
 X_q4 = minmax_scale_bipolar(_data_q4[:, :-1])
 y_q4 = _data_q4[:, -1].astype(int)
 X_train_q4, X_test_q4, y_train_q4, y_test_q4 = train_test_split_np(
@@ -263,3 +274,98 @@ run_mlp_case(
 run_mlp_case(
     "MLP Overfitting (80 neuronios)", 80, X_train_q4, X_test_q4, y_train_q4, y_test_q4
 )
+
+
+# =====================================================================
+# Questão 5: R rodadas, 80/20 aleatório, métricas no teste (Perceptron,
+# Adaline, MLP — sem RBF). Executa sempre após a Questão 4 (pode demorar).
+# =====================================================================
+
+
+def split_train_test_8020(X, y, rng, test_frac=0.2):
+    n = X.shape[0]
+    n_test = max(1, int(round(n * test_frac)))
+    idx = rng.permutation(n)
+    tst = idx[:n_test]
+    trn = idx[n_test:]
+    return X[trn], X[tst], y[trn], y[tst]
+
+
+def classification_metrics_plus_one_positive(y_true, y_pred):
+    """Classe +1 como positiva; classe -1 como negativa (convenção Questão 5)."""
+    y_true = np.asarray(y_true).astype(int).ravel()
+    y_pred = np.asarray(y_pred).astype(int).ravel()
+    tp = int(np.sum((y_true == 1) & (y_pred == 1)))
+    tn = int(np.sum((y_true == -1) & (y_pred == -1)))
+    fp = int(np.sum((y_true == -1) & (y_pred == 1)))
+    fn = int(np.sum((y_true == 1) & (y_pred == -1)))
+    denom = tp + tn + fp + fn
+    acc = (tp + tn) / denom if denom else 0.0
+    sens = tp / (tp + fn) if (tp + fn) else 0.0
+    spec = tn / (tn + fp) if (tn + fp) else 0.0
+    prec = tp / (tp + fp) if (tp + fp) else 0.0
+    if sens == 0.0 and prec == 0.0:
+        f1 = 0.0
+    else:
+        f1 = (2 * prec * sens) / (prec + sens)
+    return acc, sens, spec, prec, f1
+
+
+_Xt = np.loadtxt(CSV_DATA_PATH, delimiter=",")
+X5 = minmax_scale_bipolar(_Xt[:, :-1])
+y5 = _Xt[:, -1].astype(int)
+R = int(RODADAS_Q5)
+nomes_metricas = ("acuracia", "sensibilidade", "especificidade", "precisao", "f1")
+resultado = {}
+resultado["Perceptron"] = np.zeros((R, 5))
+resultado["Adaline"] = np.zeros((R, 5))
+resultado["MLP"] = np.zeros((R, 5))
+
+for r in range(R):
+    rng = np.random.default_rng(SEED_Q5_MASTER + r)
+    X_tr, X_te, y_tr, y_te = split_train_test_8020(X5, y5, rng)
+
+    ps = simples_perceptron(learning_rate=0.00005, n_epochs=100)
+    ps.fit(X_tr, y_tr, patience=10)
+    resultado["Perceptron"][r, :] = classification_metrics_plus_one_positive(
+        y_te, ps.predict(X_te)
+    )
+
+    ada = Adaline(learning_rate=0.0001, n_epochs=500)
+    ada.fit(X_tr, y_tr, prec=1e-6)
+    resultado["Adaline"][r, :] = classification_metrics_plus_one_positive(
+        y_te, ada.predict(X_te)
+    )
+
+    seed_mlp = int(SEED_Q5_MASTER + 100000 + r)
+    np.random.seed(seed_mlp % (2**32 - 1))
+    mlp = MLP(
+        n_input=2,
+        n_hidden=65,
+        n_output=1,
+        learning_rate=LR_MLP_Q5,
+        n_epochs=N_EPOCHS_MLP_Q5,
+    )
+    mlp.fit(X_tr, y_tr.reshape(-1, 1))
+    y_hat = np.where(mlp.predict(X_te).ravel() >= 0.0, 1, -1)
+    resultado["MLP"][r, :] = classification_metrics_plus_one_positive(y_te, y_hat)
+
+    if (r + 1) % 50 == 0 or r == 0:
+        print(f"Questao 5 — rodada {r + 1}/{R}")
+
+print("\n=== Questão 5: resumo (média ± desvio, teste apenas) ===")
+for nome, arr in resultado.items():
+    print(f"\n[{nome}]")
+    for j, nome_m in enumerate(nomes_metricas):
+        col = arr[:, j]
+        print(f"  {nome_m}: media={np.mean(col):.4f}, std={np.std(col):.4f}, "
+              f"min={np.min(col):.4f}, max={np.max(col):.4f}")
+
+resultado_path = CSV_DATA_PATH.parent / "metricas_questao5.npz"
+np.savez(
+    resultado_path,
+    perceptron=resultado["Perceptron"],
+    adaline=resultado["Adaline"],
+    mlp=resultado["MLP"],
+)
+print(f"\nResultados salvos em: {resultado_path} (perceptron, adaline, mlp; colunas = 5 metricas)")
