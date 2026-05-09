@@ -1,3 +1,7 @@
+import contextlib
+import io
+from collections import defaultdict
+
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -29,7 +33,8 @@ plt.title("Visualização dos Dados de Entrada")
 plt.show()
 
 perceptron_simples = simples_perceptron(learning_rate=0.00005, n_epochs=100)
-perceptron_simples.fit(X, y, patience=10)
+with contextlib.redirect_stdout(io.StringIO()):
+    perceptron_simples.fit(X, y, patience=10)
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 
@@ -57,7 +62,8 @@ plt.show()
 # ---------------------------------------
 
 modelo_adaline = Adaline(learning_rate=0.0001, n_epochs=500)
-modelo_adaline.fit(X, y, prec=1e-6)
+with contextlib.redirect_stdout(io.StringIO()):
+    modelo_adaline.fit(X, y, prec=1e-6)
 
     # 3. Visualização
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
@@ -119,7 +125,9 @@ d_mlp = y.reshape(-1, 1)
 # n_input=2 (x e y), n_hidden=65, n_output=1
 np.random.seed(SEED_MLP_PRINCIPAL)
 modelo_mlp = MLP(n_input=2, n_hidden=65, n_output=1, learning_rate=0.00022222222222, n_epochs=70000)
+print("Treinando MLP principal (70000 epocas): aguarde; o modelo imprime a cada 100 epocas.")
 modelo_mlp.fit(X, d_mlp)
+print("MLP principal concluído.")
 
 
 
@@ -248,7 +256,8 @@ def run_mlp_case(case_name, n_hidden, X_train, X_test, y_train, y_test):
         learning_rate=0.01,
         n_epochs=5000,
     )
-    model.fit(X_train, y_train.reshape(-1, 1))
+    with contextlib.redirect_stdout(io.StringIO()):
+        model.fit(X_train, y_train.reshape(-1, 1))
     y_pred_raw = model.predict(X_test).flatten()
     y_pred = np.where(y_pred_raw >= 0, 1, -1)
     cm = confusion_matrix_binary(y_test, y_pred)
@@ -322,36 +331,39 @@ resultado["Adaline"] = np.zeros((R, 5))
 resultado["MLP"] = np.zeros((R, 5))
 
 for r in range(R):
-    rng = np.random.default_rng(SEED_Q5_MASTER + r)
-    X_tr, X_te, y_tr, y_te = split_train_test_8020(X5, y5, rng)
+    # Cada rodada treina Perceptron + Adaline + MLP (silenciado); pode levar bastante tempo.
+    print(f"Questao 5 — treinando rodada {r + 1}/{R}...", flush=True)
+    _buf = io.StringIO()
+    with contextlib.redirect_stdout(_buf):
+        rng = np.random.default_rng(SEED_Q5_MASTER + r)
+        X_tr, X_te, y_tr, y_te = split_train_test_8020(X5, y5, rng)
 
-    ps = simples_perceptron(learning_rate=0.00005, n_epochs=100)
-    ps.fit(X_tr, y_tr, patience=10)
-    resultado["Perceptron"][r, :] = classification_metrics_plus_one_positive(
-        y_te, ps.predict(X_te)
-    )
+        ps = simples_perceptron(learning_rate=0.00005, n_epochs=100)
+        ps.fit(X_tr, y_tr, patience=10)
+        resultado["Perceptron"][r, :] = classification_metrics_plus_one_positive(
+            y_te, ps.predict(X_te)
+        )
 
-    ada = Adaline(learning_rate=0.0001, n_epochs=500)
-    ada.fit(X_tr, y_tr, prec=1e-6)
-    resultado["Adaline"][r, :] = classification_metrics_plus_one_positive(
-        y_te, ada.predict(X_te)
-    )
+        ada = Adaline(learning_rate=0.0001, n_epochs=500)
+        ada.fit(X_tr, y_tr, prec=1e-6)
+        resultado["Adaline"][r, :] = classification_metrics_plus_one_positive(
+            y_te, ada.predict(X_te)
+        )
 
-    seed_mlp = int(SEED_Q5_MASTER + 100000 + r)
-    np.random.seed(seed_mlp % (2**32 - 1))
-    mlp = MLP(
-        n_input=2,
-        n_hidden=65,
-        n_output=1,
-        learning_rate=LR_MLP_Q5,
-        n_epochs=N_EPOCHS_MLP_Q5,
-    )
-    mlp.fit(X_tr, y_tr.reshape(-1, 1))
-    y_hat = np.where(mlp.predict(X_te).ravel() >= 0.0, 1, -1)
-    resultado["MLP"][r, :] = classification_metrics_plus_one_positive(y_te, y_hat)
+        seed_mlp = int(SEED_Q5_MASTER + 100000 + r)
+        np.random.seed(seed_mlp % (2**32 - 1))
+        mlp = MLP(
+            n_input=2,
+            n_hidden=65,
+            n_output=1,
+            learning_rate=LR_MLP_Q5,
+            n_epochs=N_EPOCHS_MLP_Q5,
+        )
+        mlp.fit(X_tr, y_tr.reshape(-1, 1))
+        y_hat = np.where(mlp.predict(X_te).ravel() >= 0.0, 1, -1)
+        resultado["MLP"][r, :] = classification_metrics_plus_one_positive(y_te, y_hat)
 
-    if (r + 1) % 50 == 0 or r == 0:
-        print(f"Questao 5 — rodada {r + 1}/{R}")
+    print(f"Questao 5 — rodada {r + 1}/{R} concluida.", flush=True)
 
 print("\n=== Questão 5: resumo (média ± desvio, teste apenas) ===")
 for nome, arr in resultado.items():
@@ -361,6 +373,44 @@ for nome, arr in resultado.items():
         print(f"  {nome_m}: media={np.mean(col):.4f}, std={np.std(col):.4f}, "
               f"min={np.min(col):.4f}, max={np.max(col):.4f}")
 
+# --- Questão 7 (PDF): uma TABELA por métrica — linhas = modelos; colunas = média, desvio, min, max ---
+print(
+    "\n"
+    + "*" * 60
+    + "\n>>> AGORA: QUESTAO 7 — tabelas (media, desvio, min, max) por METRICA\n"
+    + "    (apos as 500 rodadas; antes do Item 1.6 / figuras)\n"
+    + "*" * 60
+    + "\n",
+    flush=True,
+)
+_ordem_q7 = ["Perceptron", "Adaline", "MLP"]
+_linhas_q7 = []
+for j, nome_m in enumerate(nomes_metricas):
+    print(f"\n--- {nome_m.upper()} ---")
+    hdr = f"{'Modelo':<14} {'Media':>10} {'Desvio':>10} {'Min':>10} {'Max':>10}"
+    print(hdr)
+    _linhas_q7.append("")
+    _linhas_q7.append(f"=== {nome_m.upper()} ===")
+    _linhas_q7.append(hdr)
+    for nome in _ordem_q7:
+        col = resultado[nome][:, j]
+        linha = (
+            f"{nome:<14} {np.mean(col):10.4f} {np.std(col):10.4f} "
+            f"{np.min(col):10.4f} {np.max(col):10.4f}"
+        )
+        print(linha)
+        _linhas_q7.append(linha)
+_questao7_txt = CSV_DATA_PATH.parent / "questao7_tabelas_metricas.txt"
+_questao7_txt.write_text("\n".join(_linhas_q7), encoding="utf-8")
+print(f"\n(Também salvo em {_questao7_txt} para copiar no relatório.)", flush=True)
+print(
+    "*" * 60
+    + "\n>>> FIM DA QUESTAO 7 — em seguida: salvar .npz e Item 1.6 (figuras)\n"
+    + "*" * 60
+    + "\n",
+    flush=True,
+)
+
 resultado_path = CSV_DATA_PATH.parent / "metricas_questao5.npz"
 np.savez(
     resultado_path,
@@ -369,3 +419,228 @@ np.savez(
     mlp=resultado["MLP"],
 )
 print(f"\nResultados salvos em: {resultado_path} (perceptron, adaline, mlp; colunas = 5 metricas)")
+
+# Questão 5 — Item 6: sns.heatmap (API oficial) sobre matrizes NumPy montadas pela equipe;
+# confusão 2x2 manual + uma folha só com todas as rodadas relevantes.
+
+
+def replicar_split_e_treinos_q5(numero_rodada):
+    rng = np.random.default_rng(SEED_Q5_MASTER + int(numero_rodada))
+    X_tr, X_te, y_tr, y_te = split_train_test_8020(X5, y5, rng)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        ps = simples_perceptron(learning_rate=0.00005, n_epochs=100)
+        ps.fit(X_tr, y_tr, patience=10)
+        y_hat_p = ps.predict(X_te)
+
+        ada = Adaline(learning_rate=0.0001, n_epochs=500)
+        ada.fit(X_tr, y_tr, prec=1e-6)
+        y_hat_a = ada.predict(X_te)
+
+        seed_mlp = int(SEED_Q5_MASTER + 100000 + int(numero_rodada))
+        np.random.seed(seed_mlp % (2**32 - 1))
+        mlp = MLP(
+            n_input=2,
+            n_hidden=65,
+            n_output=1,
+            learning_rate=LR_MLP_Q5,
+            n_epochs=N_EPOCHS_MLP_Q5,
+        )
+        mlp.fit(X_tr, y_tr.reshape(-1, 1))
+        y_hat_m = np.where(mlp.predict(X_te).ravel() >= 0.0, 1, -1)
+
+    cms = {
+        "Perceptron": confusion_matrix_binary(y_te, y_hat_p),
+        "Adaline": confusion_matrix_binary(y_te, y_hat_a),
+        "MLP": confusion_matrix_binary(y_te, y_hat_m),
+    }
+    curvas = {
+        "Perceptron": list(ps.errors),
+        "Adaline": list(ada.errors),
+        "MLP": list(mlp.errors),
+    }
+    return y_te, cms, curvas
+
+
+print("\n=== Questão 5 — Item 6: extremos, heatmaps seaborn.confusion + resumo modelo×métrica ===")
+
+NOMES_MODELOS_ITEM6 = ["Perceptron", "Adaline", "MLP"]
+ROT_METRICAS_LEGIVEL = [
+    "Acuracia",
+    "Sensibilidade",
+    "Especificidade",
+    "Precisao",
+    "F1",
+]
+
+M_max = np.zeros((3, 5))
+M_min = np.zeros((3, 5))
+I_max = np.zeros((3, 5), dtype=int)
+I_min = np.zeros((3, 5), dtype=int)
+for mi, modelo in enumerate(NOMES_MODELOS_ITEM6):
+    tbl = resultado[modelo]
+    for j in range(5):
+        M_max[mi, j] = np.max(tbl[:, j])
+        M_min[mi, j] = np.min(tbl[:, j])
+        I_max[mi, j] = int(np.argmax(tbl[:, j]))
+        I_min[mi, j] = int(np.argmin(tbl[:, j]))
+
+fig_res, axes_res = plt.subplots(2, 2, figsize=(13, 9))
+sns.heatmap(
+    M_max,
+    annot=True,
+    fmt=".4f",
+    cmap="rocket",
+    xticklabels=ROT_METRICAS_LEGIVEL,
+    yticklabels=NOMES_MODELOS_ITEM6,
+    linewidths=0.5,
+    linecolor="white",
+    ax=axes_res[0, 0],
+    cbar_kws={"label": "Valor"},
+)
+axes_res[0, 0].set_title("Maior valor por modelo e métrica (500 rodadas)")
+
+sns.heatmap(
+    M_min,
+    annot=True,
+    fmt=".4f",
+    cmap="mako_r",
+    xticklabels=ROT_METRICAS_LEGIVEL,
+    yticklabels=NOMES_MODELOS_ITEM6,
+    linewidths=0.5,
+    linecolor="white",
+    ax=axes_res[0, 1],
+    cbar_kws={"label": "Valor"},
+)
+axes_res[0, 1].set_title("Menor valor por modelo e métrica (500 rodadas)")
+
+sns.heatmap(
+    I_max.astype(float),
+    annot=I_max,
+    fmt="d",
+    cmap="viridis",
+    xticklabels=ROT_METRICAS_LEGIVEL,
+    yticklabels=NOMES_MODELOS_ITEM6,
+    linewidths=0.5,
+    linecolor="white",
+    ax=axes_res[1, 0],
+    cbar_kws={"label": "Índice da rodada"},
+)
+axes_res[1, 0].set_title("Rodada onde ocorreu o MÁximo (mesma seed Monte Carlo da Q5)")
+
+sns.heatmap(
+    I_min.astype(float),
+    annot=I_min,
+    fmt="d",
+    cmap="viridis",
+    xticklabels=ROT_METRICAS_LEGIVEL,
+    yticklabels=NOMES_MODELOS_ITEM6,
+    linewidths=0.5,
+    linecolor="white",
+    ax=axes_res[1, 1],
+    cbar_kws={"label": "Índice da rodada"},
+)
+axes_res[1, 1].set_title("Rodada onde ocorreu o MÍnimo")
+
+fig_res.suptitle(
+    "Resumo Questão 5 — Item 6 (matplotlib + seaborn.heatmap conforme documentação oficial)",
+    fontsize=11,
+    y=1.02,
+)
+plt.tight_layout()
+plt.show()
+
+casos_item6_por_rodada = defaultdict(list)
+for modelo_ref, mat in resultado.items():
+    for indice_metrica, nome_m in enumerate(nomes_metricas):
+        valor_max = float(np.max(mat[:, indice_metrica]))
+        valor_min = float(np.min(mat[:, indice_metrica]))
+        rodada_max = int(np.argmax(mat[:, indice_metrica]))
+        rodada_min = int(np.argmin(mat[:, indice_metrica]))
+
+        casos_item6_por_rodada[rodada_max].append(
+            f"{modelo_ref} | {nome_m} | max={valor_max:.4f}"
+        )
+        casos_item6_por_rodada[rodada_min].append(
+            f"{modelo_ref} | {nome_m} | min={valor_min:.4f}"
+        )
+
+rodadas_item6 = sorted(casos_item6_por_rodada.keys())
+print(
+    "Item 6 — rodadas únicas onde algum extreme cai:",
+    rodadas_item6,
+)
+cache_item6 = {rnd: replicar_split_e_treinos_q5(rnd) for rnd in rodadas_item6}
+
+altura_linha_cm = max(3.0, min(4.8, 100.0 / max(len(rodadas_item6), 1)))
+fig_cm, axes_cm = plt.subplots(
+    len(rodadas_item6),
+    3,
+    figsize=(11, len(rodadas_item6) * altura_linha_cm),
+    squeeze=False,
+)
+etiq_bin = [-1, 1]
+for ri, rnd in enumerate(rodadas_item6):
+    _, cms, _ = cache_item6[rnd]
+    for ci, nome in enumerate(NOMES_MODELOS_ITEM6):
+        sns.heatmap(
+            cms[nome],
+            annot=True,
+            fmt="d",
+            cmap="Greens",
+            xticklabels=etiq_bin,
+            yticklabels=etiq_bin,
+            linewidths=0.5,
+            linecolor="white",
+            ax=axes_cm[ri, ci],
+            cbar=ci == 2,
+            annot_kws={"size": 9},
+        )
+        axes_cm[ri, ci].set_xlabel("Predito")
+        axes_cm[ri, ci].set_ylabel("Real")
+        axes_cm[0, ci].set_title(nome)
+    axes_cm[ri, 1].annotate(
+        f"particao idx {rnd}",
+        xy=(0.5, 1.06),
+        xycoords="axes fraction",
+        ha="center",
+        fontsize=9,
+        color="dimgray",
+    )
+
+fig_cm.suptitle(
+    "Item 6 — matrizes de confusão (TN/FP/FN/TP construídas em NumPy; plot com sns.heatmap)",
+    fontsize=11,
+)
+plt.tight_layout()
+plt.subplots_adjust(top=0.94)
+plt.show()
+
+altura_linha_lc = max(2.6, min(5.5, 90.0 / max(len(rodadas_item6), 1)))
+fig_lc, axes_lc = plt.subplots(
+    len(rodadas_item6),
+    3,
+    figsize=(13, len(rodadas_item6) * altura_linha_lc),
+    squeeze=False,
+)
+ylabel_lc = ("Soma |erro|/epoca", "EQM", "MSE")
+for ri, rnd in enumerate(rodadas_item6):
+    _, _, curvas = cache_item6[rnd]
+    for ci, nome in enumerate(NOMES_MODELOS_ITEM6):
+        axes_lc[ri, ci].plot(curvas[nome], lw=1.0)
+        axes_lc[0, ci].set_title(nome)
+        axes_lc[ri, ci].set_ylabel(ylabel_lc[ci])
+        axes_lc[ri, ci].set_xlabel("Epoca")
+    axes_lc[ri, 1].annotate(
+        f"particao idx {rnd}",
+        xy=(0.5, 1.04),
+        xycoords="axes fraction",
+        ha="center",
+        fontsize=9,
+        color="dimgray",
+    )
+
+fig_lc.suptitle("Item 6 — curvas de aprendizado (mesmo split das linhas da figura anterior)", fontsize=11)
+plt.tight_layout()
+plt.subplots_adjust(top=0.96)
+plt.show()
